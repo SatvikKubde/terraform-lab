@@ -11,25 +11,48 @@ provider "docker" {
   host = "unix:///var/run/docker.sock"
 }
 
-# Pull image
+# Pull nginx image
 resource "docker_image" "nginx" {
   name = "nginx:latest"
 }
 
-# Module 1
-module "container1" {
-  source = "./modules/nginx_container"
-
-  container_name = "nginx1"
-  container_port = 8081
-  image_name     = docker_image.nginx.image_id
+# Dynamic container list
+variable "container_config" {
+  default = [
+    {
+      name = "web1"
+      port = 8081
+    },
+    {
+      name = "web2"
+      port = 8082
+    },
+    {
+      name = "web3"
+      port = 8083
+    }
+  ]
 }
 
-# Module 2
-module "container2" {
-  source = "./modules/nginx_container"
+# Create containers dynamically
+resource "docker_container" "nginx" {
+  for_each = {
+    for c in var.container_config : c.name => c
+  }
 
-  container_name = "nginx2"
-  container_port = 8082
-  image_name     = docker_image.nginx.image_id
+  name  = each.value.name
+  image = docker_image.nginx.image_id
+
+  ports {
+    internal = 80
+    external = each.value.port
+  }
+}
+
+# Output all URLs
+output "container_urls" {
+  value = [
+    for c in var.container_config :
+    "http://localhost:${c.port}"
+  ]
 }
